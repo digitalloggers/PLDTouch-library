@@ -3,9 +3,13 @@
 
 struct Point
 {
-    unsigned long x, y;
+    long x, y;
+    bool valid;
+
     Point();
-    Point(unsigned long x0, unsigned long y0);
+    Point(long x0, long y0);
     Point(const Point &pt);
+
     bool isValid() const;
+    void set (long x0, long y0);
 };
