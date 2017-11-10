@@ -16,13 +16,13 @@
 class PLDTouch
 {
 public:
-	PLDTouch (byte tcs, byte irq, long display_width=320, long display_height=240);
-	void init (byte rotation = PLDTOUCH_ROTATE_90);
-	bool dataAvailable();
-	Point read (int precision = 100);
-	Point readRaw();
+    PLDTouch (byte tcs, byte irq, long display_width=320, long display_height=240);
+    void init (byte rotation = PLDTOUCH_ROTATE_90);
+    bool dataAvailable();
+    Point read (int precision = 100);
+    Point readRaw();
 private:
-	byte T_CS, T_IRQ;
-	byte rotation;
-	long display_width, display_height;
+    byte T_CS, T_IRQ;
+    byte rotation;
+    long display_width, display_height;
 };
