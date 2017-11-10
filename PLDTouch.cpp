@@ -1,48 +1,30 @@
 #include <SPI.h>
 #include "PLDTouch.h"
-
-#define CAL_X 0x00378F66UL
-#define CAL_Y 0x03C34155UL
-#define CAL_S 0x000EF13FUL
+#include "calibration.h"
+word ctl(byte command);
 
 
-PLDTouch::PLDTouch(byte tcs, byte irq)
+PLDTouch::PLDTouch(byte tcs, byte irq, long dispw, long disph)
+  : rotation(PLDTOUCH_NO_ROTATION),
+    display_width(dispw),
+    display_height(disph),
+    T_CS(tcs), T_IRQ(irq)
 {
-    T_CS         = tcs;
-    T_IRQ        = irq;
 }
 
 
 void PLDTouch::init(byte rotation)
 {
-	this->rotation			= rotation;
-	_default_orientation	= CAL_S >> 31;
-	touch_x_left			= (CAL_X >> 14) & 0x3FFF;
-	touch_x_right			= CAL_X & 0x3FFF;
-	touch_y_top				= (CAL_Y >> 14) & 0x3FFF;
-	touch_y_bottom			= CAL_Y & 0x3FFF;
-	disp_x_size				= (CAL_S >> 12) & 0x0FFF;
-	disp_y_size				= CAL_S & 0x0FFF;
-
 	pinMode(T_IRQ, INPUT); digitalWrite(T_IRQ, HIGH);
     pinMode(T_CS, OUTPUT); digitalWrite(T_CS, HIGH);
-}
-
-
-word ctl(byte command)
-{
-	SPI.transfer(command);
-	byte f1 = SPI.transfer(0x00);
-	byte f2 = SPI.transfer(0x00);
-	return word(f1, f2) >> 3;
+	this->rotation = rotation;
 }
 
 
 Point PLDTouch::read (int precision)
 {
-	unsigned long tx=0;
-	unsigned long ty=0;
-	int datacount=0;
+	unsigned long tmpx=0, tmpy=0;
+	int datacount = 0;
 	
 	SPI.begin();
 	SPI.setClockDivider(SPI_CLOCK_DIV32);
@@ -51,10 +33,10 @@ Point PLDTouch::read (int precision)
 	{
 		unsigned long x = ctl(0x90);
 		unsigned long y = ctl(0xD0);
-		if (!(x>max(touch_x_left, touch_x_right) || x==0 || y>max(touch_y_top, touch_y_bottom) || y==0))
+		if (x!=0 && y!=0)
 		{
-			ty += x;
-			tx += y;
+			tmpx += x;
+			tmpy += y;
 			datacount++;
 		}
 	}
@@ -63,18 +45,27 @@ Point PLDTouch::read (int precision)
 
 	if (datacount==0) return Point();
 
-	long touch_width = touch_x_right - touch_x_left;
-	long touch_height = touch_y_bottom - touch_y_top;
-
-	long tpx = long(tx / datacount - touch_x_left) * disp_x_size / touch_width;
-	long tpy = long(ty / datacount - touch_y_top) * disp_y_size / touch_height;
+	const long touch_x = tmpx/datacount - PLDTOUCH_CAL_LEFT;
+	const long touch_y = tmpy/datacount - PLDTOUCH_CAL_TOP;
+	const long touch_width = PLDTOUCH_CAL_RIGHT - PLDTOUCH_CAL_LEFT;
+	const long touch_height = PLDTOUCH_CAL_BOTTOM - PLDTOUCH_CAL_TOP;
+	const long display_x = touch_x * display_width / touch_width;
+	const long display_y = touch_y * display_height / touch_height;
 
 	switch(rotation)
 	{
-		case NO_ROTATION:	return Point(tpx, tpy);
-		case ROTATE_90:		return Point(tpy, disp_x_size-tpx);
-		case ROTATE_180:	return Point(disp_x_size-tpx, disp_y_size-tpy);
-		case ROTATE_270:	return Point(disp_y_size-tpy, tpx);
+		case PLDTOUCH_NO_ROTATION:
+			return Point(display_x, display_y);
+			break;
+		case PLDTOUCH_ROTATE_90:
+			return Point(display_y, display_width - display_x);
+			break;
+		case PLDTOUCH_ROTATE_180:
+			return Point(display_width - display_x, display_height - display_y);
+			break;
+		case PLDTOUCH_ROTATE_270:
+			return Point(display_height - display_y, display_x);
+			break;
 	}
 }
 
@@ -94,4 +85,13 @@ Point PLDTouch::readRaw()
 	digitalWrite(T_CS, HIGH);
 	SPI.end();
 	return Point(tx, ty);
+}
+
+
+word ctl(byte command)
+{
+	SPI.transfer(command);
+	byte f1 = SPI.transfer(0x00);
+	byte f2 = SPI.transfer(0x00);
+	return word(f1, f2) >> 3;
 }
